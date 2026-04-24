@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Number OCR - Fixed</title>
+    <title>Number OCR - Mobile</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -35,15 +36,13 @@
             position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
             z-index: 20; background: rgba(0,0,0,0.85); color: #fff;
             padding: 8px 14px; border-radius: 16px; font-size: 11px;
-            white-space: nowrap; max-width: 90vw;
         }
         
-        /* Big loading overlay */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.92); z-index: 200;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #fff;
+            color: #fff; padding: 20px;
         }
         
         .spinner {
@@ -56,14 +55,8 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        .loading-text {
-            font-size: 16px; color: #00ff88; margin-bottom: 10px;
-        }
-        .loading-subtext {
-            font-size: 12px; color: #888;
-            max-width: 80%; text-align: center;
-            line-height: 1.5;
-        }
+        .loading-text { font-size: 16px; color: #00ff88; margin-bottom: 10px; text-align: center; }
+        .loading-subtext { font-size: 12px; color: #888; max-width: 90%; text-align: center; line-height: 1.5; }
         
         .progress-bar {
             width: 80%; max-width: 300px; height: 8px;
@@ -75,6 +68,13 @@
             transition: width 0.3s; width: 0%;
         }
         
+        .skip-btn {
+            margin-top: 20px; padding: 10px 20px;
+            background: #555; color: #fff; border: none;
+            border-radius: 20px; font-size: 13px;
+            display: none;
+        }
+        
         #debug-panel {
             position: absolute; top: 50px; left: 5px; right: 5px;
             z-index: 15; display: flex; gap: 4px; justify-content: center;
@@ -82,16 +82,13 @@
         
         .preview-box {
             background: rgba(0,0,0,0.7); border: 2px solid #00ff88;
-            border-radius: 4px; padding: 2px;
-            text-align: center;
+            border-radius: 4px; padding: 2px; text-align: center;
         }
         .preview-box canvas {
             display: block; width: 120px; height: auto;
             border-radius: 2px; background: #fff;
         }
-        .preview-label {
-            font-size: 9px; color: #00ff88;
-        }
+        .preview-label { font-size: 9px; color: #00ff88; }
 
         #result-panel {
             position: absolute; bottom: 10px; left: 5px; right: 5px;
@@ -101,9 +98,7 @@
             max-height: 60vh; overflow-y: auto;
         }
 
-        .status { 
-            font-size: 11px; color: #666; margin-bottom: 6px;
-        }
+        .status { font-size: 11px; color: #666; margin-bottom: 6px; }
         .status.error { color: #d32f2f; font-weight: bold; }
         .status.success { color: #00aa44; font-weight: bold; }
         
@@ -115,13 +110,9 @@
             border: 2px solid #00aa44;
             word-break: break-all;
         }
-        
         .code-main.empty { color: #ccc; background: #f8f8f8; border-color: #ddd; font-size: 18px; }
         
-        .results-list {
-            margin-top: 8px; 
-            max-height: 150px; overflow-y: auto;
-        }
+        .results-list { margin-top: 8px; max-height: 150px; overflow-y: auto; }
         
         .result-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -135,8 +126,7 @@
         .result-item .meta { font-size: 10px; color: #888; }
         
         .raw-log {
-            font-size: 10px; 
-            font-family: monospace; text-align: left;
+            font-size: 10px; font-family: monospace; text-align: left;
             max-height: 80px; overflow-y: auto;
             background: #222; color: #0f8; padding: 4px;
             border-radius: 3px; margin-top: 4px;
@@ -162,7 +152,6 @@
 
         canvas.hidden { display: none; }
 
-        /* Capture button */
         #capture-btn {
             position: absolute; bottom: calc(60vh + 10px); left: 50%;
             transform: translateX(-50%); z-index: 30;
@@ -178,9 +167,7 @@
             background: #888; border-color: #666; cursor: not-allowed;
             opacity: 0.6;
         }
-        #capture-btn.scanning {
-            background: #ffa500;
-        }
+        #capture-btn.scanning { background: #ffa500; }
         #capture-btn.scanning::after {
             content: ''; position: absolute;
             top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -191,14 +178,13 @@
         }
         
         .btn-row {
-            display: flex; gap: 6px; justify-content: center;
-            margin-top: 6px;
+            display: flex; gap: 6px; justify-content: center; margin-top: 6px;
         }
         
         .mini-btn {
             padding: 5px 12px; font-size: 11px; 
             border: 1px solid #ddd; background: #fff;
-            border-radius: 4px; cursor: pointer;
+            border-radius: 4px;
         }
         .mini-btn.active { background: #00ff88; border-color: #00ff88; font-weight: bold; }
         .mini-btn.danger { background: #ff4444; color: #fff; border-color: #ff4444; }
@@ -206,14 +192,17 @@
 </head>
 <body>
 
-<!-- Loading overlay -->
 <div id="loading-overlay" style="display:none;">
     <div class="spinner"></div>
     <div class="loading-text" id="loading-text">กำลังโหลด AI...</div>
-    <div class="loading-subtext" id="loading-subtext">ครั้งแรกอาจใช้เวลานาน 30-60 วินาที<br>กรุณารอให้โหลดเสร็จก่อนกดสแกน</div>
+    <div class="loading-subtext" id="loading-subtext">
+        ครั้งแรกอาจใช้เวลา 30-60 วินาที<br>
+        กรุณารอ...
+    </div>
     <div class="progress-bar">
         <div class="progress-fill" id="progress-fill"></div>
     </div>
+    <button class="skip-btn" id="skip-btn" onclick="forceReady()">⚠️ ข้ามไปเลย (ถ้าค้าง)</button>
 </div>
 
 <div id="camera-container">
@@ -239,7 +228,7 @@
         <button class="ctrl-btn active" id="debug-btn" onclick="toggleDebug()">🔍</button>
     </div>
     
-    <button id="capture-btn" disabled onclick="captureAndScan()" title="Scan"></button>
+    <button id="capture-btn" disabled onclick="captureAndScan()"></button>
     
     <button id="start-btn" onclick="initSystem()">📷 แตะเพื่อเริ่ม</button>
 
@@ -248,8 +237,8 @@
         <div class="code-main empty" id="result">--- กดปุ่มขาวเพื่อสแกน ---</div>
         
         <div class="btn-row">
-            <button class="mini-btn active" id="mode-fast" onclick="setMode('fast')">⚡ Fast (2 passes)</button>
-            <button class="mini-btn" id="mode-best" onclick="setMode('best')">🎯 Best (5 passes)</button>
+            <button class="mini-btn active" id="mode-fast" onclick="setMode('fast')">⚡ Fast</button>
+            <button class="mini-btn" id="mode-best" onclick="setMode('best')">🎯 Best</button>
         </div>
         
         <div class="results-list" id="resultsList" style="display:none;"></div>
@@ -266,7 +255,6 @@
 <canvas id="work-canvas" class="hidden"></canvas>
 
 <script>
-    // ===== DOM =====
     const video = document.getElementById('video');
     const canvas = document.getElementById('crop-canvas');
     const workCanvas = document.getElementById('work-canvas');
@@ -288,15 +276,16 @@
     const loadingText = document.getElementById('loading-text');
     const loadingSubtext = document.getElementById('loading-subtext');
     const progressFill = document.getElementById('progress-fill');
+    const skipBtn = document.getElementById('skip-btn');
     
-    // ===== State =====
     let worker = null;
-    let workerReady = false;   // ⭐ สำคัญ - flag ว่า worker พร้อม
+    let workerReady = false;
     let track = null;
     let flashOn = false;
     let debugMode = true;
     let isProcessing = false;
-    let scanMode = 'fast';  // 'fast' = 2 passes, 'best' = 5 passes
+    let scanMode = 'fast';
+    let skipTimeout = null;
     
     let allResults = {};
     let rawLogs = [];
@@ -305,15 +294,12 @@
         scanMode = mode;
         document.getElementById('mode-fast').classList.toggle('active', mode === 'fast');
         document.getElementById('mode-best').classList.toggle('active', mode === 'best');
-        statusDiv.innerText = mode === 'fast' ? 
-            '⚡ โหมดเร็ว (2 strategies)' : 
-            '🎯 โหมดแม่น (5 strategies, ช้ากว่า)';
     }
 
     function showLoading(text, subtext, progress = null) {
         loadingOverlay.style.display = 'flex';
         if (text) loadingText.innerText = text;
-        if (subtext) loadingSubtext.innerHTML = subtext;
+        if (subtext !== undefined) loadingSubtext.innerHTML = subtext;
         if (progress !== null) {
             progressFill.style.width = progress + '%';
         }
@@ -321,6 +307,17 @@
     
     function hideLoading() {
         loadingOverlay.style.display = 'none';
+        if (skipTimeout) clearTimeout(skipTimeout);
+    }
+
+    // ⭐ Force ready - ข้ามไป ถ้าค้าง
+    function forceReady() {
+        console.log('Force ready clicked');
+        workerReady = true;
+        captureBtn.disabled = false;
+        hideLoading();
+        statusDiv.innerText = '✅ พร้อม (force) - ลองสแกนได้เลย';
+        statusDiv.classList.add('success');
     }
 
     async function initSystem() {
@@ -336,15 +333,24 @@
             await startCamera();
             
             showLoading('กำลังโหลด AI...', 
-                'ครั้งแรกอาจใช้เวลา 30-60 วินาที<br>(โหลด ~10MB จากอินเทอร์เน็ต)<br>ครั้งต่อไปจะเร็วขึ้น', 
+                'ครั้งแรกอาจใช้เวลา 30-60 วินาที<br>ถ้าค้างที่ 100% นาน กดปุ่ม "ข้ามไปเลย"', 
                 10);
+            
+            // ⭐ แสดงปุ่ม skip หลัง 15 วินาที
+            skipTimeout = setTimeout(() => {
+                skipBtn.style.display = 'block';
+                loadingSubtext.innerHTML = 
+                    '⚠️ โหลดนานเกิน 15 วินาที<br>' +
+                    'ถ้าค้าง กดปุ่มด้านล่างเพื่อลองใช้งาน';
+            }, 15000);
+            
             await initOCR();
             
         } catch (e) {
             hideLoading();
             statusDiv.innerText = "❌ " + e.message;
             statusDiv.classList.add('error');
-            alert('เกิดข้อผิดพลาด: ' + e.message);
+            console.error(e);
         }
     }
 
@@ -379,7 +385,6 @@
                     document.getElementById('flash-btn').style.display = 'none';
                 }
             } catch (e) {}
-            
         } catch (err) {
             throw new Error("เปิดกล้องไม่ได้: " + err.message);
         }
@@ -401,13 +406,15 @@
         document.getElementById('debug-btn').classList.toggle('active', debugMode);
     }
 
-    // ===== Initialize OCR (robust) =====
+    // ⭐ Initialize OCR - ไม่ test, ไม่รอ 100%
     async function initOCR() {
         try {
-            // สร้าง worker พร้อม progress tracking
+            let lastProgress = 0;
+            let progressStuck = 0;
+            
             worker = await Tesseract.createWorker('eng', 1, {
                 logger: m => { 
-                    console.log('OCR:', m);
+                    console.log('OCR:', m.status, m.progress);
                     
                     if (m.status && m.progress !== undefined) {
                         const progress = Math.round(m.progress * 100);
@@ -417,55 +424,57 @@
                         else if (m.status.includes('loading language')) statusThai = 'โหลดภาษา';
                         else if (m.status.includes('initializing api')) statusThai = 'เริ่มต้น API';
                         else if (m.status.includes('initialized api')) statusThai = 'API พร้อม';
+                        else if (m.status.includes('recognizing')) statusThai = 'กำลัง recognize';
                         
                         showLoading(
-                            `${statusThai}...`,
-                            `${progress}%`,
-                            10 + progress * 0.85  // 10-95%
+                            `${statusThai} ${progress}%`,
+                            undefined,
+                            10 + progress * 0.85
                         );
+                        
+                        // ⭐ ตรวจจับว่า stuck ที่ 100% หรือไม่
+                        if (progress === 100) {
+                            progressStuck++;
+                            if (progressStuck > 3) {
+                                skipBtn.style.display = 'block';
+                                loadingSubtext.innerHTML = 
+                                    '✅ โหลดเสร็จแล้ว แต่ยังติดอยู่<br>' +
+                                    'กดปุ่มด้านล่างเพื่อเริ่มใช้งาน';
+                            }
+                        }
+                        
+                        lastProgress = progress;
                     }
-                },
-                errorHandler: err => {
-                    console.error('Worker error:', err);
                 }
             });
             
-            // ตั้งค่า parameters
-            showLoading('ตั้งค่า...', 'เกือบเสร็จแล้ว', 95);
-            await worker.setParameters({
-                tessedit_char_whitelist: '0123456789',
-                tessedit_pageseg_mode: '6',
-            });
+            console.log('Worker created successfully');
             
-            // ⭐ Test worker ด้วยรูปตัวอย่างเล็กๆ
-            showLoading('ทดสอบ AI...', 'กำลังตรวจสอบว่าใช้งานได้', 98);
-            const testCanvas = document.createElement('canvas');
-            testCanvas.width = 100;
-            testCanvas.height = 50;
-            const tctx = testCanvas.getContext('2d');
-            tctx.fillStyle = '#fff';
-            tctx.fillRect(0, 0, 100, 50);
-            tctx.fillStyle = '#000';
-            tctx.font = 'bold 40px Arial';
-            tctx.fillText('123', 10, 40);
+            // ตั้งค่า parameters (อาจค้าง บน mobile - ใส่ timeout)
+            showLoading('ตั้งค่า parameters...', 'เกือบเสร็จแล้ว', 95);
             
             try {
-                const testResult = await worker.recognize(testCanvas);
-                console.log('Test OCR result:', testResult.data.text);
+                // ⭐ Timeout 5 วินาที สำหรับ setParameters
+                await Promise.race([
+                    worker.setParameters({
+                        tessedit_char_whitelist: '0123456789',
+                        tessedit_pageseg_mode: '6',
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('setParameters timeout')), 5000)
+                    )
+                ]);
             } catch (e) {
-                console.error('Test failed:', e);
-                // ไม่ throw ยังใช้ได้
+                console.warn('setParameters warning:', e);
+                // ไปต่อแม้จะ timeout (Tesseract มักจะยังใช้ได้)
             }
             
-            // ⭐ ตั้ง flag ว่าพร้อม
+            // ⭐ ไม่ test! ข้ามไปเลย
             workerReady = true;
-            
-            showLoading('✅ พร้อม!', '', 100);
-            
-            // เปิดปุ่ม
             captureBtn.disabled = false;
             
-            // ซ่อน loading หลัง 500ms
+            showLoading('✅ พร้อมใช้งาน!', '', 100);
+            
             setTimeout(() => {
                 hideLoading();
                 statusDiv.innerText = "✅ พร้อมสแกน - กดปุ่มขาว";
@@ -474,7 +483,12 @@
             
         } catch (e) {
             console.error('Init OCR failed:', e);
-            throw new Error("AI โหลดไม่ได้: " + e.message);
+            // ⭐ แม้ fail ก็ให้ใช้งานได้
+            skipBtn.style.display = 'block';
+            loadingSubtext.innerHTML = 
+                '❌ เจอปัญหา: ' + e.message + '<br>' +
+                'ลองกดปุ่มด้านล่างเพื่อใช้งานอยู่ดี';
+            throw e;
         }
     }
 
@@ -576,7 +590,6 @@
         } catch (e) {}
     }
 
-    // Strategies ตามโหมด
     function getStrategies() {
         const fast = [
             { psm: '6', mode: 'contrast', label: 'PSM6-cont' },
@@ -590,6 +603,16 @@
             { psm: '7',  mode: 'binary',   label: 'PSM7-bin' },
         ];
         return scanMode === 'fast' ? fast : best;
+    }
+
+    // ⭐ Recognize พร้อม timeout
+    async function recognizeWithTimeout(canvas, timeoutMs = 15000) {
+        return Promise.race([
+            worker.recognize(canvas),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('OCR timeout')), timeoutMs)
+            )
+        ]);
     }
 
     async function runMultiStrategy(sourceCanvas) {
@@ -608,12 +631,21 @@
                 
                 enhance(wctx, workCanvas.width, workCanvas.height, strat.mode);
                 
-                await worker.setParameters({
-                    tessedit_char_whitelist: '0123456789',
-                    tessedit_pageseg_mode: strat.psm,
-                });
+                try {
+                    await Promise.race([
+                        worker.setParameters({
+                            tessedit_char_whitelist: '0123456789',
+                            tessedit_pageseg_mode: strat.psm,
+                        }),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('setParameters timeout')), 3000)
+                        )
+                    ]);
+                } catch (e) {
+                    console.warn('setParams failed, continuing...');
+                }
                 
-                const result = await worker.recognize(workCanvas);
+                const result = await recognizeWithTimeout(workCanvas, 15000);
                 const rawText = result.data.text.trim();
                 const cleanText = rawText.replace(/[^0-9]/g, '');
                 
@@ -629,9 +661,7 @@
                 console.error(`Strategy ${strat.label} failed:`, e);
                 results.push({
                     strategy: strat.label,
-                    raw: '',
-                    clean: '',
-                    confidence: 0,
+                    raw: '', clean: '', confidence: 0,
                     error: e.message
                 });
             }
@@ -641,20 +671,14 @@
     }
 
     async function captureAndScan() {
-        // ⭐ เช็คว่า worker พร้อมจริงๆ
-        if (!workerReady || !worker) {
-            statusDiv.innerText = '⚠️ AI ยังโหลดไม่เสร็จ กรุณารอ...';
+        if (!worker) {
+            statusDiv.innerText = '⚠️ AI ยังไม่พร้อม';
             statusDiv.classList.add('error');
-            // ลอง init ใหม่
-            showLoading('รอ AI...', 'ตรวจสอบสถานะ', 50);
-            setTimeout(() => {
-                if (workerReady) hideLoading();
-            }, 2000);
             return;
         }
         
         if (isProcessing) {
-            statusDiv.innerText = '⏳ กำลังประมวลผล กรุณารอ...';
+            statusDiv.innerText = '⏳ กำลังประมวลผล...';
             return;
         }
         
@@ -676,7 +700,6 @@
                 return;
             }
             
-            // Upscale - ลดเหลือ 3x เพื่อประหยัด RAM มือถือ
             const scale = 3;
             canvas.width = roi.w * scale;
             canvas.height = roi.h * scale;
@@ -728,7 +751,7 @@
                 
                 if (navigator.vibrate) navigator.vibrate(100);
             } else {
-                statusDiv.innerText = '❌ อ่านไม่ออก - ลองใหม่หรือปรับมุม';
+                statusDiv.innerText = '❌ อ่านไม่ออก - ลองใหม่';
                 statusDiv.classList.add('error');
             }
             
@@ -751,8 +774,7 @@
     function updateResultsList() {
         const sorted = Object.entries(allResults)
             .map(([num, info]) => ({
-                num,
-                count: info.count,
+                num, count: info.count,
                 avgConf: info.totalConf / info.count,
                 length: num.length
             }))
@@ -804,7 +826,7 @@
         resultsListDiv.style.display = 'none';
         rawLogDiv.innerHTML = '';
         clearBtn.style.display = 'none';
-        statusDiv.innerText = '🗑️ เคลียร์แล้ว - พร้อมสแกนใหม่';
+        statusDiv.innerText = '🗑️ เคลียร์แล้ว';
         statusDiv.classList.remove('success', 'error');
     }
 </script>
