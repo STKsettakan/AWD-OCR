@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Number OCR - Handwriting</title>
+    <title>Number OCR - Fixed</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -39,10 +38,46 @@
             white-space: nowrap; max-width: 90vw;
         }
         
+        /* Big loading overlay */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.92); z-index: 200;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #fff;
+        }
+        
+        .spinner {
+            width: 60px; height: 60px;
+            border: 5px solid rgba(0,255,136,0.2);
+            border-top-color: #00ff88;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .loading-text {
+            font-size: 16px; color: #00ff88; margin-bottom: 10px;
+        }
+        .loading-subtext {
+            font-size: 12px; color: #888;
+            max-width: 80%; text-align: center;
+            line-height: 1.5;
+        }
+        
+        .progress-bar {
+            width: 80%; max-width: 300px; height: 8px;
+            background: rgba(255,255,255,0.1); border-radius: 4px;
+            margin-top: 15px; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; background: #00ff88;
+            transition: width 0.3s; width: 0%;
+        }
+        
         #debug-panel {
             position: absolute; top: 50px; left: 5px; right: 5px;
             z-index: 15; display: flex; gap: 4px; justify-content: center;
-            flex-wrap: wrap;
         }
         
         .preview-box {
@@ -50,14 +85,12 @@
             border-radius: 4px; padding: 2px;
             text-align: center;
         }
-        
         .preview-box canvas {
-            display: block; width: 100px; height: auto;
+            display: block; width: 120px; height: auto;
             border-radius: 2px; background: #fff;
         }
-        
         .preview-label {
-            font-size: 8px; color: #00ff88;
+            font-size: 9px; color: #00ff88;
         }
 
         #result-panel {
@@ -71,6 +104,8 @@
         .status { 
             font-size: 11px; color: #666; margin-bottom: 6px;
         }
+        .status.error { color: #d32f2f; font-weight: bold; }
+        .status.success { color: #00aa44; font-weight: bold; }
         
         .code-main { 
             font-size: 32px; font-weight: 700; color: #00aa44; 
@@ -81,11 +116,11 @@
             word-break: break-all;
         }
         
-        .code-main.empty { color: #ccc; background: #f8f8f8; border-color: #ddd; font-size: 20px; }
+        .code-main.empty { color: #ccc; background: #f8f8f8; border-color: #ddd; font-size: 18px; }
         
         .results-list {
             margin-top: 8px; 
-            max-height: 180px; overflow-y: auto;
+            max-height: 150px; overflow-y: auto;
         }
         
         .result-item {
@@ -93,7 +128,6 @@
             padding: 5px 8px; margin: 3px 0;
             background: #f5f5f5; border-radius: 4px;
             font-family: monospace; font-size: 14px;
-            cursor: pointer;
         }
         .result-item:active { background: #00ff88; }
         .result-item.top { background: #fff8dc; border-left: 3px solid #ffa500; }
@@ -101,11 +135,11 @@
         .result-item .meta { font-size: 10px; color: #888; }
         
         .raw-log {
-            font-size: 10px; color: #aaa; margin-top: 4px;
+            font-size: 10px; 
             font-family: monospace; text-align: left;
-            max-height: 60px; overflow-y: auto;
+            max-height: 80px; overflow-y: auto;
             background: #222; color: #0f8; padding: 4px;
-            border-radius: 3px;
+            border-radius: 3px; margin-top: 4px;
         }
 
         #start-btn {
@@ -128,42 +162,66 @@
 
         canvas.hidden { display: none; }
 
+        /* Capture button */
         #capture-btn {
             position: absolute; bottom: calc(60vh + 10px); left: 50%;
             transform: translateX(-50%); z-index: 30;
-            width: 70px; height: 70px; border-radius: 50%;
+            width: 75px; height: 75px; border-radius: 50%;
             background: #fff; border: 5px solid #00ff88;
-            display: none;
+            display: none; cursor: pointer;
+            transition: all 0.2s;
         }
-        #capture-btn:active { transform: translateX(-50%) scale(0.9); }
+        #capture-btn:active:not(:disabled) { 
+            transform: translateX(-50%) scale(0.92);
+        }
+        #capture-btn:disabled {
+            background: #888; border-color: #666; cursor: not-allowed;
+            opacity: 0.6;
+        }
         #capture-btn.scanning {
             background: #ffa500;
         }
         #capture-btn.scanning::after {
             content: ''; position: absolute;
             top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 30px; height: 30px;
-            border: 3px solid #fff; border-top-color: transparent;
+            width: 32px; height: 32px;
+            border: 4px solid #fff; border-top-color: transparent;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
-        @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
         
-        .clear-btn {
-            padding: 4px 12px; font-size: 11px; 
-            background: #ff4444; color: #fff; border: none;
-            border-radius: 4px; margin-top: 4px;
+        .btn-row {
+            display: flex; gap: 6px; justify-content: center;
+            margin-top: 6px;
         }
+        
+        .mini-btn {
+            padding: 5px 12px; font-size: 11px; 
+            border: 1px solid #ddd; background: #fff;
+            border-radius: 4px; cursor: pointer;
+        }
+        .mini-btn.active { background: #00ff88; border-color: #00ff88; font-weight: bold; }
+        .mini-btn.danger { background: #ff4444; color: #fff; border-color: #ff4444; }
     </style>
 </head>
 <body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay" style="display:none;">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">กำลังโหลด AI...</div>
+    <div class="loading-subtext" id="loading-subtext">ครั้งแรกอาจใช้เวลานาน 30-60 วินาที<br>กรุณารอให้โหลดเสร็จก่อนกดสแกน</div>
+    <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+    </div>
+</div>
 
 <div id="camera-container">
     <video id="video" autoplay playsinline muted></video>
     
     <div id="scanner-overlay"></div>
     
-    <div id="instruction" style="display:none;">📍 วางตัวเลขในกรอบ กดปุ่มขาวเพื่อสแกน</div>
+    <div id="instruction" style="display:none;">📍 วางตัวเลขในกรอบ</div>
     
     <div id="debug-panel" style="display:none;">
         <div class="preview-box">
@@ -181,7 +239,7 @@
         <button class="ctrl-btn active" id="debug-btn" onclick="toggleDebug()">🔍</button>
     </div>
     
-    <button id="capture-btn" onclick="captureAndScan()" title="Scan"></button>
+    <button id="capture-btn" disabled onclick="captureAndScan()" title="Scan"></button>
     
     <button id="start-btn" onclick="initSystem()">📷 แตะเพื่อเริ่ม</button>
 
@@ -189,11 +247,18 @@
         <div class="status" id="status">กำลังเตรียมการ...</div>
         <div class="code-main empty" id="result">--- กดปุ่มขาวเพื่อสแกน ---</div>
         
+        <div class="btn-row">
+            <button class="mini-btn active" id="mode-fast" onclick="setMode('fast')">⚡ Fast (2 passes)</button>
+            <button class="mini-btn" id="mode-best" onclick="setMode('best')">🎯 Best (5 passes)</button>
+        </div>
+        
         <div class="results-list" id="resultsList" style="display:none;"></div>
         
         <div class="raw-log" id="rawLog" style="display:none;"></div>
         
-        <button class="clear-btn" onclick="clearAll()" style="display:none;" id="clearBtn">🗑️ Clear</button>
+        <div class="btn-row">
+            <button class="mini-btn danger" onclick="clearAll()" id="clearBtn" style="display:none;">🗑️ Clear</button>
+        </div>
     </div>
 </div>
 
@@ -201,6 +266,7 @@
 <canvas id="work-canvas" class="hidden"></canvas>
 
 <script>
+    // ===== DOM =====
     const video = document.getElementById('video');
     const canvas = document.getElementById('crop-canvas');
     const workCanvas = document.getElementById('work-canvas');
@@ -218,16 +284,44 @@
     const debugPanel = document.getElementById('debug-panel');
     const captureBtn = document.getElementById('capture-btn');
     const clearBtn = document.getElementById('clearBtn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    const loadingSubtext = document.getElementById('loading-subtext');
+    const progressFill = document.getElementById('progress-fill');
     
+    // ===== State =====
     let worker = null;
+    let workerReady = false;   // ⭐ สำคัญ - flag ว่า worker พร้อม
     let track = null;
     let flashOn = false;
     let debugMode = true;
     let isProcessing = false;
+    let scanMode = 'fast';  // 'fast' = 2 passes, 'best' = 5 passes
     
-    // เก็บผลสแกนทั้งหมด (ตัวเลขเท่านั้น)
-    let allResults = {};  // { "6810508400005": {count: 3, avgConf: 65}, ...}
+    let allResults = {};
     let rawLogs = [];
+
+    function setMode(mode) {
+        scanMode = mode;
+        document.getElementById('mode-fast').classList.toggle('active', mode === 'fast');
+        document.getElementById('mode-best').classList.toggle('active', mode === 'best');
+        statusDiv.innerText = mode === 'fast' ? 
+            '⚡ โหมดเร็ว (2 strategies)' : 
+            '🎯 โหมดแม่น (5 strategies, ช้ากว่า)';
+    }
+
+    function showLoading(text, subtext, progress = null) {
+        loadingOverlay.style.display = 'flex';
+        if (text) loadingText.innerText = text;
+        if (subtext) loadingSubtext.innerHTML = subtext;
+        if (progress !== null) {
+            progressFill.style.width = progress + '%';
+        }
+    }
+    
+    function hideLoading() {
+        loadingOverlay.style.display = 'none';
+    }
 
     async function initSystem() {
         startBtn.style.display = 'none';
@@ -238,47 +332,57 @@
         captureBtn.style.display = 'block';
         
         try {
+            showLoading('กำลังเปิดกล้อง...', 'อนุญาตให้เข้าถึงกล้อง', 5);
             await startCamera();
+            
+            showLoading('กำลังโหลด AI...', 
+                'ครั้งแรกอาจใช้เวลา 30-60 วินาที<br>(โหลด ~10MB จากอินเทอร์เน็ต)<br>ครั้งต่อไปจะเร็วขึ้น', 
+                10);
             await initOCR();
+            
         } catch (e) {
+            hideLoading();
             statusDiv.innerText = "❌ " + e.message;
+            statusDiv.classList.add('error');
+            alert('เกิดข้อผิดพลาด: ' + e.message);
         }
     }
 
     async function startCamera() {
-        statusDiv.innerText = "เปิดกล้อง...";
-        
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { 
-                facingMode: { ideal: "environment" },
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-            }
-        });
-        video.srcObject = stream;
-        track = stream.getVideoTracks()[0];
-        await video.play();
-        
-        await new Promise(resolve => {
-            if (video.videoWidth > 0) resolve();
-            else video.onloadedmetadata = resolve;
-        });
-        
         try {
-            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-            const advanced = [];
-            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
-                advanced.push({ focusMode: 'continuous' });
-            }
-            if (advanced.length > 0) {
-                await track.applyConstraints({ advanced });
-            }
-            if (capabilities.torch === undefined) {
-                document.getElementById('flash-btn').style.display = 'none';
-            }
-        } catch (e) {}
-        
-        statusDiv.innerText = `กล้อง OK (${video.videoWidth}x${video.videoHeight})`;
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { 
+                    facingMode: { ideal: "environment" },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
+            });
+            video.srcObject = stream;
+            track = stream.getVideoTracks()[0];
+            await video.play();
+            
+            await new Promise(resolve => {
+                if (video.videoWidth > 0) resolve();
+                else video.onloadedmetadata = resolve;
+            });
+            
+            try {
+                const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+                const advanced = [];
+                if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                    advanced.push({ focusMode: 'continuous' });
+                }
+                if (advanced.length > 0) {
+                    await track.applyConstraints({ advanced });
+                }
+                if (capabilities.torch === undefined) {
+                    document.getElementById('flash-btn').style.display = 'none';
+                }
+            } catch (e) {}
+            
+        } catch (err) {
+            throw new Error("เปิดกล้องไม่ได้: " + err.message);
+        }
     }
 
     async function toggleFlash() {
@@ -297,20 +401,79 @@
         document.getElementById('debug-btn').classList.toggle('active', debugMode);
     }
 
+    // ===== Initialize OCR (robust) =====
     async function initOCR() {
-        statusDiv.innerText = "โหลด AI...";
         try {
+            // สร้าง worker พร้อม progress tracking
             worker = await Tesseract.createWorker('eng', 1, {
                 logger: m => { 
+                    console.log('OCR:', m);
+                    
                     if (m.status && m.progress !== undefined) {
-                        statusDiv.innerText = `${m.status}: ${Math.round(m.progress * 100)}%`;
+                        const progress = Math.round(m.progress * 100);
+                        
+                        let statusThai = m.status;
+                        if (m.status.includes('loading tesseract core')) statusThai = 'โหลด Tesseract Core';
+                        else if (m.status.includes('loading language')) statusThai = 'โหลดภาษา';
+                        else if (m.status.includes('initializing api')) statusThai = 'เริ่มต้น API';
+                        else if (m.status.includes('initialized api')) statusThai = 'API พร้อม';
+                        
+                        showLoading(
+                            `${statusThai}...`,
+                            `${progress}%`,
+                            10 + progress * 0.85  // 10-95%
+                        );
                     }
+                },
+                errorHandler: err => {
+                    console.error('Worker error:', err);
                 }
             });
             
-            statusDiv.innerText = "✅ พร้อม - กดปุ่มขาวเพื่อสแกน";
+            // ตั้งค่า parameters
+            showLoading('ตั้งค่า...', 'เกือบเสร็จแล้ว', 95);
+            await worker.setParameters({
+                tessedit_char_whitelist: '0123456789',
+                tessedit_pageseg_mode: '6',
+            });
+            
+            // ⭐ Test worker ด้วยรูปตัวอย่างเล็กๆ
+            showLoading('ทดสอบ AI...', 'กำลังตรวจสอบว่าใช้งานได้', 98);
+            const testCanvas = document.createElement('canvas');
+            testCanvas.width = 100;
+            testCanvas.height = 50;
+            const tctx = testCanvas.getContext('2d');
+            tctx.fillStyle = '#fff';
+            tctx.fillRect(0, 0, 100, 50);
+            tctx.fillStyle = '#000';
+            tctx.font = 'bold 40px Arial';
+            tctx.fillText('123', 10, 40);
+            
+            try {
+                const testResult = await worker.recognize(testCanvas);
+                console.log('Test OCR result:', testResult.data.text);
+            } catch (e) {
+                console.error('Test failed:', e);
+                // ไม่ throw ยังใช้ได้
+            }
+            
+            // ⭐ ตั้ง flag ว่าพร้อม
+            workerReady = true;
+            
+            showLoading('✅ พร้อม!', '', 100);
+            
+            // เปิดปุ่ม
+            captureBtn.disabled = false;
+            
+            // ซ่อน loading หลัง 500ms
+            setTimeout(() => {
+                hideLoading();
+                statusDiv.innerText = "✅ พร้อมสแกน - กดปุ่มขาว";
+                statusDiv.classList.add('success');
+            }, 500);
             
         } catch (e) {
+            console.error('Init OCR failed:', e);
             throw new Error("AI โหลดไม่ได้: " + e.message);
         }
     }
@@ -349,16 +512,12 @@
         };
     }
 
-    // ===== Preprocessing แบบอ่อน - เน้นเพิ่ม contrast เฉยๆ =====
-    function enhance(ctx, width, height, mode = 'contrast') {
+    function enhance(ctx, width, height, mode) {
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         
-        if (mode === 'raw') {
-            return imageData;
-        }
+        if (mode === 'raw') return;
         
-        // หา min/max ของ luminance
         let min = 255, max = 0;
         const gray = new Uint8ClampedArray(width * height);
         
@@ -370,18 +529,15 @@
         }
         
         if (mode === 'contrast') {
-            // Contrast stretching - เพิ่ม contrast แต่ยังคง gradient
             const range = max - min;
             if (range > 10) {
                 for (let i = 0, j = 0; i < data.length; i += 4, j++) {
                     let v = Math.round(((gray[j] - min) / range) * 255);
-                    // เพิ่ม gamma correction เล็กน้อย (เน้นตัวดำ)
                     v = Math.round(255 * Math.pow(v / 255, 0.8));
                     data[i] = v; data[i+1] = v; data[i+2] = v;
                 }
             }
         } else if (mode === 'binary') {
-            // Otsu
             const histogram = new Array(256).fill(0);
             for (let i = 0; i < gray.length; i++) histogram[gray[i]]++;
             
@@ -407,51 +563,56 @@
         }
         
         ctx.putImageData(imageData, 0, 0);
-        return imageData;
     }
     
     function copyToPreview(srcCanvas, destCanvas) {
         if (!debugMode) return;
-        const maxW = 100;
-        const aspect = srcCanvas.height / srcCanvas.width;
-        destCanvas.width = maxW;
-        destCanvas.height = Math.round(maxW * aspect);
-        destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, destCanvas.width, destCanvas.height);
+        try {
+            const maxW = 120;
+            const aspect = srcCanvas.height / srcCanvas.width;
+            destCanvas.width = maxW;
+            destCanvas.height = Math.round(maxW * aspect);
+            destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, destCanvas.width, destCanvas.height);
+        } catch (e) {}
     }
 
-    // ===== Multi-strategy OCR =====
-    // ลองหลาย PSM + preprocessing แล้วรวมผล
-    async function runMultiStrategy(sourceCanvas) {
-        const strategies = [
-            { psm: '6',  mode: 'contrast', label: 'PSM6-contrast' },
-            { psm: '7',  mode: 'contrast', label: 'PSM7-contrast' },
-            { psm: '11', mode: 'contrast', label: 'PSM11-contrast' },
-            { psm: '6',  mode: 'binary',   label: 'PSM6-binary' },
-            { psm: '7',  mode: 'binary',   label: 'PSM7-binary' },
+    // Strategies ตามโหมด
+    function getStrategies() {
+        const fast = [
+            { psm: '6', mode: 'contrast', label: 'PSM6-cont' },
+            { psm: '7', mode: 'binary',   label: 'PSM7-bin' },
         ];
-        
+        const best = [
+            { psm: '6',  mode: 'contrast', label: 'PSM6-cont' },
+            { psm: '7',  mode: 'contrast', label: 'PSM7-cont' },
+            { psm: '11', mode: 'contrast', label: 'PSM11-cont' },
+            { psm: '6',  mode: 'binary',   label: 'PSM6-bin' },
+            { psm: '7',  mode: 'binary',   label: 'PSM7-bin' },
+        ];
+        return scanMode === 'fast' ? fast : best;
+    }
+
+    async function runMultiStrategy(sourceCanvas) {
+        const strategies = getStrategies();
         const results = [];
         
         for (let i = 0; i < strategies.length; i++) {
             const strat = strategies[i];
-            statusDiv.innerText = `⚙️ Strategy ${i+1}/${strategies.length}: ${strat.label}`;
-            
-            // Copy source → work canvas
-            workCanvas.width = sourceCanvas.width;
-            workCanvas.height = sourceCanvas.height;
-            const wctx = workCanvas.getContext('2d', { willReadFrequently: true });
-            wctx.drawImage(sourceCanvas, 0, 0);
-            
-            // Enhance
-            enhance(wctx, workCanvas.width, workCanvas.height, strat.mode);
-            
-            // Set PSM + whitelist (ตัวเลขเท่านั้น!)
-            await worker.setParameters({
-                tessedit_char_whitelist: '0123456789',
-                tessedit_pageseg_mode: strat.psm,
-            });
+            statusDiv.innerText = `⚙️ ${i+1}/${strategies.length}: ${strat.label}...`;
             
             try {
+                workCanvas.width = sourceCanvas.width;
+                workCanvas.height = sourceCanvas.height;
+                const wctx = workCanvas.getContext('2d', { willReadFrequently: true });
+                wctx.drawImage(sourceCanvas, 0, 0);
+                
+                enhance(wctx, workCanvas.width, workCanvas.height, strat.mode);
+                
+                await worker.setParameters({
+                    tessedit_char_whitelist: '0123456789',
+                    tessedit_pageseg_mode: strat.psm,
+                });
+                
                 const result = await worker.recognize(workCanvas);
                 const rawText = result.data.text.trim();
                 const cleanText = rawText.replace(/[^0-9]/g, '');
@@ -460,32 +621,46 @@
                     strategy: strat.label,
                     raw: rawText,
                     clean: cleanText,
-                    confidence: result.data.confidence,
-                    words: result.data.words || []
+                    confidence: result.data.confidence
                 });
                 
-                // เก็บ preview ของ strategy แรก
-                if (i === 0) {
-                    copyToPreview(workCanvas, preview2);
-                }
+                if (i === 0) copyToPreview(workCanvas, preview2);
             } catch (e) {
-                console.error('Strategy error:', e);
+                console.error(`Strategy ${strat.label} failed:`, e);
+                results.push({
+                    strategy: strat.label,
+                    raw: '',
+                    clean: '',
+                    confidence: 0,
+                    error: e.message
+                });
             }
         }
         
         return results;
     }
 
-    // ===== Main Scan Function =====
     async function captureAndScan() {
-        if (isProcessing) return;
-        if (!worker) {
-            statusDiv.innerText = '⚠️ AI ยังไม่พร้อม';
+        // ⭐ เช็คว่า worker พร้อมจริงๆ
+        if (!workerReady || !worker) {
+            statusDiv.innerText = '⚠️ AI ยังโหลดไม่เสร็จ กรุณารอ...';
+            statusDiv.classList.add('error');
+            // ลอง init ใหม่
+            showLoading('รอ AI...', 'ตรวจสอบสถานะ', 50);
+            setTimeout(() => {
+                if (workerReady) hideLoading();
+            }, 2000);
+            return;
+        }
+        
+        if (isProcessing) {
+            statusDiv.innerText = '⏳ กำลังประมวลผล กรุณารอ...';
             return;
         }
         
         isProcessing = true;
         captureBtn.classList.add('scanning');
+        captureBtn.disabled = true;
         
         try {
             if (video.readyState < video.HAVE_CURRENT_DATA || video.videoWidth === 0) {
@@ -501,8 +676,8 @@
                 return;
             }
             
-            // Upscale 4x (เพิ่มจาก 3x) - ภาพใหญ่ = OCR ดีขึ้น
-            const scale = 4;
+            // Upscale - ลดเหลือ 3x เพื่อประหยัด RAM มือถือ
+            const scale = 3;
             canvas.width = roi.w * scale;
             canvas.height = roi.h * scale;
             
@@ -512,61 +687,64 @@
                 roi.x, roi.y, roi.w, roi.h,
                 0, 0, canvas.width, canvas.height);
             
-            // Save original for preview
             copyToPreview(canvas, preview1);
             
-            // Run multi-strategy OCR
             const results = await runMultiStrategy(canvas);
             
-            // Process results
             let bestNumber = '';
-            let bestConfidence = 0;
+            let bestScore = 0;
             
             results.forEach(r => {
-                rawLogs.unshift(`[${r.strategy}] "${r.raw}" → "${r.clean}" (${Math.round(r.confidence)}%)`);
+                if (r.error) {
+                    rawLogs.unshift(`❌ [${r.strategy}] ERROR: ${r.error}`);
+                } else {
+                    rawLogs.unshift(`[${r.strategy}] "${r.raw}" → "${r.clean}" (${Math.round(r.confidence)}%)`);
+                }
                 
-                // เก็บ unique numbers
-                if (r.clean.length >= 3) {
+                if (r.clean.length >= 2) {
                     if (!allResults[r.clean]) {
-                        allResults[r.clean] = { count: 0, totalConf: 0, sources: [] };
+                        allResults[r.clean] = { count: 0, totalConf: 0 };
                     }
                     allResults[r.clean].count++;
                     allResults[r.clean].totalConf += r.confidence;
-                    allResults[r.clean].sources.push(r.strategy);
                     
-                    // ดูว่าเป็น best ไหม
                     const score = r.confidence * Math.log(r.clean.length + 1);
-                    if (score > bestConfidence) {
-                        bestConfidence = score;
+                    if (score > bestScore) {
+                        bestScore = score;
                         bestNumber = r.clean;
                     }
                 }
             });
             
-            // อัพเดท log
-            if (rawLogs.length > 20) rawLogs = rawLogs.slice(0, 20);
+            if (rawLogs.length > 30) rawLogs = rawLogs.slice(0, 30);
             rawLogDiv.innerHTML = rawLogs.slice(0, 10).map(l => `<div>${l}</div>`).join('');
             
-            // แสดงผล
             if (bestNumber) {
                 resultDiv.innerText = bestNumber;
                 resultDiv.classList.remove('empty');
-                statusDiv.innerText = `✅ พบ ${Object.keys(allResults).length} ตัวเลือก`;
+                statusDiv.innerText = `✅ สแกนสำเร็จ (${Object.keys(allResults).length} ตัวเลือก)`;
+                statusDiv.classList.add('success');
+                statusDiv.classList.remove('error');
                 
                 if (navigator.vibrate) navigator.vibrate(100);
             } else {
-                statusDiv.innerText = '❌ อ่านไม่ออก - ลองใหม่';
+                statusDiv.innerText = '❌ อ่านไม่ออก - ลองใหม่หรือปรับมุม';
+                statusDiv.classList.add('error');
             }
             
             updateResultsList();
-            clearBtn.style.display = 'block';
+            clearBtn.style.display = 'inline-block';
             
         } catch (e) {
             statusDiv.innerText = `❌ Error: ${e.message}`;
+            statusDiv.classList.add('error');
             console.error(e);
+            rawLogs.unshift(`FATAL: ${e.message}`);
+            rawLogDiv.innerHTML = rawLogs.slice(0, 10).map(l => `<div>${l}</div>`).join('');
         } finally {
             isProcessing = false;
             captureBtn.classList.remove('scanning');
+            captureBtn.disabled = false;
         }
     }
     
@@ -579,7 +757,6 @@
                 length: num.length
             }))
             .sort((a, b) => {
-                // Sort by: count (desc), then length (desc), then confidence (desc)
                 if (b.count !== a.count) return b.count - a.count;
                 if (b.length !== a.length) return b.length - a.length;
                 return b.avgConf - a.avgConf;
@@ -592,8 +769,8 @@
         
         resultsListDiv.style.display = 'block';
         resultsListDiv.innerHTML = 
-            '<div style="font-size:11px; color:#888; margin-bottom:4px; text-align:left; padding: 0 4px;">ผลลัพธ์ทั้งหมด (แตะเพื่อเลือก):</div>' +
-            sorted.slice(0, 15).map((r, i) => 
+            '<div style="font-size:11px; color:#888; margin-bottom:4px; text-align:left; padding:0 4px;">ผลลัพธ์ (แตะเพื่อเลือก):</div>' +
+            sorted.slice(0, 10).map((r, i) => 
                 `<div class="result-item ${i === 0 ? 'top' : ''}" onclick="selectResult('${r.num}')">
                     <span class="num">${r.num}</span>
                     <span class="meta">${r.length}d × ${r.count} (${Math.round(r.avgConf)}%)</span>
@@ -608,7 +785,12 @@
         if (navigator.clipboard) {
             navigator.clipboard.writeText(num).then(() => {
                 statusDiv.innerText = `📋 Copied: ${num}`;
+                statusDiv.classList.add('success');
+            }).catch(() => {
+                statusDiv.innerText = `เลือก: ${num}`;
             });
+        } else {
+            statusDiv.innerText = `เลือก: ${num}`;
         }
         
         if (navigator.vibrate) navigator.vibrate(50);
@@ -623,6 +805,7 @@
         rawLogDiv.innerHTML = '';
         clearBtn.style.display = 'none';
         statusDiv.innerText = '🗑️ เคลียร์แล้ว - พร้อมสแกนใหม่';
+        statusDiv.classList.remove('success', 'error');
     }
 </script>
 
