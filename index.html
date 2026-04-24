@@ -1,135 +1,629 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time High Precision OCR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Number OCR - Handwriting</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
-        body { margin: 0; font-family: sans-serif; background: #000; color: #fff; overflow: hidden; }
-        #camera-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
-        
-        /* กรอบเล็งสีเขียว (ROI) */
-        #scanner-overlay {
-            position: absolute; width: 80%; height: 100px;
-            border: 2px solid #00ff00; box-shadow: 0 0 0 1000px rgba(0,0,0,0.5);
-            z-index: 10; border-radius: 8px;
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            margin: 0; font-family: -apple-system, sans-serif; 
+            background: #000; color: #fff; overflow: hidden; touch-action: manipulation;
+            user-select: none;
         }
-        #scanner-overlay::after {
-            content: "วางรหัสให้อยู่ในกรอบนี้"; position: absolute; top: -30px; left: 0;
-            width: 100%; text-align: center; color: #00ff00; font-size: 14px;
+        
+        #camera-container { 
+            position: relative; width: 100vw; height: 100vh; 
+            display: flex; justify-content: center; align-items: center; 
+        }
+        
+        video { 
+            position: absolute; width: 100%; height: 100%; 
+            object-fit: cover; top: 0; left: 0;
+        }
+        
+        #scanner-overlay {
+            position: absolute; width: 92%; max-width: 650px; height: 130px;
+            box-shadow: 0 0 0 2000px rgba(0,0,0,0.4);
+            z-index: 10; border-radius: 8px; pointer-events: none;
+            border: 3px solid #00ff88;
+            top: 30%;
+        }
+
+        #instruction {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 20; background: rgba(0,0,0,0.85); color: #fff;
+            padding: 8px 14px; border-radius: 16px; font-size: 11px;
+            white-space: nowrap; max-width: 90vw;
+        }
+        
+        #debug-panel {
+            position: absolute; top: 50px; left: 5px; right: 5px;
+            z-index: 15; display: flex; gap: 4px; justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .preview-box {
+            background: rgba(0,0,0,0.7); border: 2px solid #00ff88;
+            border-radius: 4px; padding: 2px;
+            text-align: center;
+        }
+        
+        .preview-box canvas {
+            display: block; width: 100px; height: auto;
+            border-radius: 2px; background: #fff;
+        }
+        
+        .preview-label {
+            font-size: 8px; color: #00ff88;
         }
 
         #result-panel {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            width: 90%; background: rgba(255,255,255,0.9); padding: 15px;
+            position: absolute; bottom: 10px; left: 5px; right: 5px;
+            background: rgba(255,255,255,0.98); padding: 10px;
             border-radius: 12px; color: #000; text-align: center; z-index: 20;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            max-height: 60vh; overflow-y: auto;
         }
-        .code { font-size: 28px; font-weight: bold; color: #d9534f; margin-bottom: 5px; }
-        .status { font-size: 12px; color: #666; }
-        canvas { display: none; } /* ซ่อนตัวประมวลผล */
+
+        .status { 
+            font-size: 11px; color: #666; margin-bottom: 6px;
+        }
+        
+        .code-main { 
+            font-size: 32px; font-weight: 700; color: #00aa44; 
+            letter-spacing: 2px; font-family: 'Courier New', monospace;
+            min-height: 40px; line-height: 1;
+            padding: 8px; background: #e8f5e8; border-radius: 6px;
+            border: 2px solid #00aa44;
+            word-break: break-all;
+        }
+        
+        .code-main.empty { color: #ccc; background: #f8f8f8; border-color: #ddd; font-size: 20px; }
+        
+        .results-list {
+            margin-top: 8px; 
+            max-height: 180px; overflow-y: auto;
+        }
+        
+        .result-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 5px 8px; margin: 3px 0;
+            background: #f5f5f5; border-radius: 4px;
+            font-family: monospace; font-size: 14px;
+            cursor: pointer;
+        }
+        .result-item:active { background: #00ff88; }
+        .result-item.top { background: #fff8dc; border-left: 3px solid #ffa500; }
+        .result-item .num { font-weight: bold; letter-spacing: 1px; }
+        .result-item .meta { font-size: 10px; color: #888; }
+        
+        .raw-log {
+            font-size: 10px; color: #aaa; margin-top: 4px;
+            font-family: monospace; text-align: left;
+            max-height: 60px; overflow-y: auto;
+            background: #222; color: #0f8; padding: 4px;
+            border-radius: 3px;
+        }
+
+        #start-btn {
+            position: absolute; z-index: 100; padding: 18px 36px;
+            background: #00ff88; color: #000; border: none; border-radius: 50px;
+            font-weight: 700; font-size: 18px; 
+            box-shadow: 0 8px 25px rgba(0,255,136,0.5);
+        }
+
+        #controls {
+            position: absolute; top: 10px; right: 5px; z-index: 25;
+            display: none; gap: 4px; flex-direction: column;
+        }
+        .ctrl-btn {
+            width: 40px; height: 40px; border-radius: 50%; border: none;
+            background: rgba(0,0,0,0.7); color: #fff; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .ctrl-btn.active { background: #00ff88; color: #000; }
+
+        canvas.hidden { display: none; }
+
+        #capture-btn {
+            position: absolute; bottom: calc(60vh + 10px); left: 50%;
+            transform: translateX(-50%); z-index: 30;
+            width: 70px; height: 70px; border-radius: 50%;
+            background: #fff; border: 5px solid #00ff88;
+            display: none;
+        }
+        #capture-btn:active { transform: translateX(-50%) scale(0.9); }
+        #capture-btn.scanning {
+            background: #ffa500;
+        }
+        #capture-btn.scanning::after {
+            content: ''; position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 30px; height: 30px;
+            border: 3px solid #fff; border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+        
+        .clear-btn {
+            padding: 4px 12px; font-size: 11px; 
+            background: #ff4444; color: #fff; border: none;
+            border-radius: 4px; margin-top: 4px;
+        }
     </style>
 </head>
 <body>
 
 <div id="camera-container">
-    <video id="video" autoplay playsinline></video>
+    <video id="video" autoplay playsinline muted></video>
+    
     <div id="scanner-overlay"></div>
     
-    <div id="result-panel">
-        <div class="status" id="status">กำลังเริ่มต้นกล้อง...</div>
-        <div class="code" id="result">---</div>
-        <div id="confidence">ความมั่นใจ: 0%</div>
+    <div id="instruction" style="display:none;">📍 วางตัวเลขในกรอบ กดปุ่มขาวเพื่อสแกน</div>
+    
+    <div id="debug-panel" style="display:none;">
+        <div class="preview-box">
+            <canvas id="preview-1"></canvas>
+            <div class="preview-label">ORIGINAL</div>
+        </div>
+        <div class="preview-box">
+            <canvas id="preview-2"></canvas>
+            <div class="preview-label">ENHANCED</div>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <button class="ctrl-btn" id="flash-btn" onclick="toggleFlash()">💡</button>
+        <button class="ctrl-btn active" id="debug-btn" onclick="toggleDebug()">🔍</button>
+    </div>
+    
+    <button id="capture-btn" onclick="captureAndScan()" title="Scan"></button>
+    
+    <button id="start-btn" onclick="initSystem()">📷 แตะเพื่อเริ่ม</button>
+
+    <div id="result-panel" style="display: none;">
+        <div class="status" id="status">กำลังเตรียมการ...</div>
+        <div class="code-main empty" id="result">--- กดปุ่มขาวเพื่อสแกน ---</div>
+        
+        <div class="results-list" id="resultsList" style="display:none;"></div>
+        
+        <div class="raw-log" id="rawLog" style="display:none;"></div>
+        
+        <button class="clear-btn" onclick="clearAll()" style="display:none;" id="clearBtn">🗑️ Clear</button>
     </div>
 </div>
 
-<canvas id="crop-canvas"></canvas>
+<canvas id="crop-canvas" class="hidden"></canvas>
+<canvas id="work-canvas" class="hidden"></canvas>
 
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('crop-canvas');
+    const workCanvas = document.getElementById('work-canvas');
+    const preview1 = document.getElementById('preview-1');
+    const preview2 = document.getElementById('preview-2');
     const resultDiv = document.getElementById('result');
+    const resultsListDiv = document.getElementById('resultsList');
+    const rawLogDiv = document.getElementById('rawLog');
     const statusDiv = document.getElementById('status');
-    const confDiv = document.getElementById('confidence');
+    const startBtn = document.getElementById('start-btn');
+    const resultPanel = document.getElementById('result-panel');
+    const instruction = document.getElementById('instruction');
+    const controls = document.getElementById('controls');
+    const overlay = document.getElementById('scanner-overlay');
+    const debugPanel = document.getElementById('debug-panel');
+    const captureBtn = document.getElementById('capture-btn');
+    const clearBtn = document.getElementById('clearBtn');
+    
+    let worker = null;
+    let track = null;
+    let flashOn = false;
+    let debugMode = true;
+    let isProcessing = false;
+    
+    // เก็บผลสแกนทั้งหมด (ตัวเลขเท่านั้น)
+    let allResults = {};  // { "6810508400005": {count: 3, avgConf: 65}, ...}
+    let rawLogs = [];
 
-    let worker;
-
-    // 1. Setup Tesseract Worker ครั้งเดียวเพื่อความเร็ว
-    async function initOCR() {
-        statusDiv.innerText = "กำลังโหลด AI...";
-        worker = await Tesseract.createWorker('tha+eng');
-        statusDiv.innerText = "ระบบพร้อมสแกน";
-        startScanning();
-    }
-
-    // 2. เปิดกล้อง
-    async function startCamera() {
+    async function initSystem() {
+        startBtn.style.display = 'none';
+        resultPanel.style.display = 'block';
+        instruction.style.display = 'block';
+        controls.style.display = 'flex';
+        debugPanel.style.display = 'flex';
+        captureBtn.style.display = 'block';
+        
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
-            video.srcObject = stream;
-            initOCR();
-        } catch (err) {
-            statusDiv.innerText = "เข้าถึงกล้องไม่ได้: " + err.message;
+            await startCamera();
+            await initOCR();
+        } catch (e) {
+            statusDiv.innerText = "❌ " + e.message;
         }
     }
 
-    // 3. ฟังก์ชันหลักในการสแกนแบบ Real-time
-    async function startScanning() {
-        const ctx = canvas.getContext('2d', { alpha: false });
+    async function startCamera() {
+        statusDiv.innerText = "เปิดกล้อง...";
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            }
+        });
+        video.srcObject = stream;
+        track = stream.getVideoTracks()[0];
+        await video.play();
+        
+        await new Promise(resolve => {
+            if (video.videoWidth > 0) resolve();
+            else video.onloadedmetadata = resolve;
+        });
+        
+        try {
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            const advanced = [];
+            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                advanced.push({ focusMode: 'continuous' });
+            }
+            if (advanced.length > 0) {
+                await track.applyConstraints({ advanced });
+            }
+            if (capabilities.torch === undefined) {
+                document.getElementById('flash-btn').style.display = 'none';
+            }
+        } catch (e) {}
+        
+        statusDiv.innerText = `กล้อง OK (${video.videoWidth}x${video.videoHeight})`;
+    }
 
-        async function scanFrame() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // คำนวณพื้นที่ที่จะ Crop (เอาเฉพาะส่วนในกรอบ Overlay)
-                const scale = video.videoWidth / window.innerWidth;
-                const boxWidth = 0.8 * window.innerWidth * scale;
-                const boxHeight = 100 * scale;
-                const boxX = (video.videoWidth - boxWidth) / 2;
-                const boxY = (video.videoHeight - boxHeight) / 2;
+    async function toggleFlash() {
+        if (!track) return;
+        try {
+            flashOn = !flashOn;
+            await track.applyConstraints({ advanced: [{ torch: flashOn }] });
+            document.getElementById('flash-btn').classList.toggle('active', flashOn);
+        } catch (e) {}
+    }
 
-                canvas.width = boxWidth;
-                canvas.height = boxHeight;
+    function toggleDebug() {
+        debugMode = !debugMode;
+        debugPanel.style.display = debugMode ? 'flex' : 'none';
+        rawLogDiv.style.display = debugMode ? 'block' : 'none';
+        document.getElementById('debug-btn').classList.toggle('active', debugMode);
+    }
 
-                // วาดเฉพาะส่วนที่ต้องการสแกน
-                ctx.drawImage(video, boxX, boxY, boxWidth, boxHeight, 0, 0, boxWidth, boxHeight);
-
-                // --- Pre-processing แบบ Real-time ---
-                let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                let data = imgData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    let brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-                    // ทำ Thresholding ปรับความคม
-                    let v = brightness < 120 ? 0 : 255; 
-                    data[i] = data[i+1] = data[i+2] = v;
+    async function initOCR() {
+        statusDiv.innerText = "โหลด AI...";
+        try {
+            worker = await Tesseract.createWorker('eng', 1, {
+                logger: m => { 
+                    if (m.status && m.progress !== undefined) {
+                        statusDiv.innerText = `${m.status}: ${Math.round(m.progress * 100)}%`;
+                    }
                 }
-                ctx.putImageData(imgData, 0, 0);
+            });
+            
+            statusDiv.innerText = "✅ พร้อม - กดปุ่มขาวเพื่อสแกน";
+            
+        } catch (e) {
+            throw new Error("AI โหลดไม่ได้: " + e.message);
+        }
+    }
 
-                // ส่งไปอ่าน
-                const result = await worker.recognize(canvas);
-                const text = result.data.text.trim();
-                const confidence = result.data.confidence;
+    function calculateROI() {
+        const videoRect = video.getBoundingClientRect();
+        const overlayRect = overlay.getBoundingClientRect();
+        
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (vw === 0) return null;
+        
+        const dw = videoRect.width;
+        const dh = videoRect.height;
+        
+        const videoAspect = vw / vh;
+        const displayAspect = dw / dh;
+        
+        let scale, offsetX = 0, offsetY = 0;
+        if (videoAspect > displayAspect) {
+            scale = dh / vh;
+            offsetX = (vw * scale - dw) / 2;
+        } else {
+            scale = dw / vw;
+            offsetY = (vh * scale - dh) / 2;
+        }
+        
+        const ovLeft = overlayRect.left - videoRect.left;
+        const ovTop = overlayRect.top - videoRect.top;
+        
+        return {
+            x: Math.max(0, (ovLeft + offsetX) / scale),
+            y: Math.max(0, (ovTop + offsetY) / scale),
+            w: overlayRect.width / scale,
+            h: overlayRect.height / scale
+        };
+    }
 
-                // กรองผลลัพธ์: เอาเฉพาะที่มีความแม่นยำ 50% ขึ้นไป และมีตัวเลข/อักษรไทย
-                if (confidence > 50 && text.length > 5) {
-                    const cleanText = text.replace(/[^ก-ฮ0-9-]/g, '');
-                    resultDiv.innerText = cleanText;
-                    confDiv.innerText = `ความมั่นใจ: ${Math.round(confidence)}%`;
-                    resultDiv.style.color = "#28a745"; // สีเขียวเมื่ออ่านได้แม่น
-                } else {
-                    resultDiv.style.color = "#d9534f"; // สีแดงตอนกำลังเดา
+    // ===== Preprocessing แบบอ่อน - เน้นเพิ่ม contrast เฉยๆ =====
+    function enhance(ctx, width, height, mode = 'contrast') {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        if (mode === 'raw') {
+            return imageData;
+        }
+        
+        // หา min/max ของ luminance
+        let min = 255, max = 0;
+        const gray = new Uint8ClampedArray(width * height);
+        
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+            const g = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+            gray[j] = g;
+            if (g < min) min = g;
+            if (g > max) max = g;
+        }
+        
+        if (mode === 'contrast') {
+            // Contrast stretching - เพิ่ม contrast แต่ยังคง gradient
+            const range = max - min;
+            if (range > 10) {
+                for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+                    let v = Math.round(((gray[j] - min) / range) * 255);
+                    // เพิ่ม gamma correction เล็กน้อย (เน้นตัวดำ)
+                    v = Math.round(255 * Math.pow(v / 255, 0.8));
+                    data[i] = v; data[i+1] = v; data[i+2] = v;
                 }
             }
+        } else if (mode === 'binary') {
+            // Otsu
+            const histogram = new Array(256).fill(0);
+            for (let i = 0; i < gray.length; i++) histogram[gray[i]]++;
             
-            // วนลูปสแกน (ใช้ requestAnimationFrame หรือหน่วงเวลาเล็กน้อยเพื่อไม่ให้เครื่องร้อน)
-            setTimeout(scanFrame, 500); 
+            let sum = 0;
+            for (let i = 0; i < 256; i++) sum += i * histogram[i];
+            let sumB = 0, wB = 0, maxVar = 0, threshold = 127;
+            for (let t = 0; t < 256; t++) {
+                wB += histogram[t];
+                if (wB === 0) continue;
+                const wF = gray.length - wB;
+                if (wF === 0) break;
+                sumB += t * histogram[t];
+                const mB = sumB / wB;
+                const mF = (sum - sumB) / wF;
+                const variance = wB * wF * (mB - mF) * (mB - mF);
+                if (variance > maxVar) { maxVar = variance; threshold = t; }
+            }
+            
+            for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+                const v = gray[j] < threshold ? 0 : 255;
+                data[i] = v; data[i+1] = v; data[i+2] = v;
+            }
         }
-
-        scanFrame();
+        
+        ctx.putImageData(imageData, 0, 0);
+        return imageData;
+    }
+    
+    function copyToPreview(srcCanvas, destCanvas) {
+        if (!debugMode) return;
+        const maxW = 100;
+        const aspect = srcCanvas.height / srcCanvas.width;
+        destCanvas.width = maxW;
+        destCanvas.height = Math.round(maxW * aspect);
+        destCanvas.getContext('2d').drawImage(srcCanvas, 0, 0, destCanvas.width, destCanvas.height);
     }
 
-    startCamera();
+    // ===== Multi-strategy OCR =====
+    // ลองหลาย PSM + preprocessing แล้วรวมผล
+    async function runMultiStrategy(sourceCanvas) {
+        const strategies = [
+            { psm: '6',  mode: 'contrast', label: 'PSM6-contrast' },
+            { psm: '7',  mode: 'contrast', label: 'PSM7-contrast' },
+            { psm: '11', mode: 'contrast', label: 'PSM11-contrast' },
+            { psm: '6',  mode: 'binary',   label: 'PSM6-binary' },
+            { psm: '7',  mode: 'binary',   label: 'PSM7-binary' },
+        ];
+        
+        const results = [];
+        
+        for (let i = 0; i < strategies.length; i++) {
+            const strat = strategies[i];
+            statusDiv.innerText = `⚙️ Strategy ${i+1}/${strategies.length}: ${strat.label}`;
+            
+            // Copy source → work canvas
+            workCanvas.width = sourceCanvas.width;
+            workCanvas.height = sourceCanvas.height;
+            const wctx = workCanvas.getContext('2d', { willReadFrequently: true });
+            wctx.drawImage(sourceCanvas, 0, 0);
+            
+            // Enhance
+            enhance(wctx, workCanvas.width, workCanvas.height, strat.mode);
+            
+            // Set PSM + whitelist (ตัวเลขเท่านั้น!)
+            await worker.setParameters({
+                tessedit_char_whitelist: '0123456789',
+                tessedit_pageseg_mode: strat.psm,
+            });
+            
+            try {
+                const result = await worker.recognize(workCanvas);
+                const rawText = result.data.text.trim();
+                const cleanText = rawText.replace(/[^0-9]/g, '');
+                
+                results.push({
+                    strategy: strat.label,
+                    raw: rawText,
+                    clean: cleanText,
+                    confidence: result.data.confidence,
+                    words: result.data.words || []
+                });
+                
+                // เก็บ preview ของ strategy แรก
+                if (i === 0) {
+                    copyToPreview(workCanvas, preview2);
+                }
+            } catch (e) {
+                console.error('Strategy error:', e);
+            }
+        }
+        
+        return results;
+    }
+
+    // ===== Main Scan Function =====
+    async function captureAndScan() {
+        if (isProcessing) return;
+        if (!worker) {
+            statusDiv.innerText = '⚠️ AI ยังไม่พร้อม';
+            return;
+        }
+        
+        isProcessing = true;
+        captureBtn.classList.add('scanning');
+        
+        try {
+            if (video.readyState < video.HAVE_CURRENT_DATA || video.videoWidth === 0) {
+                statusDiv.innerText = '⚠️ กล้องยังไม่พร้อม';
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const roi = calculateROI();
+            
+            if (!roi || roi.w < 10 || roi.h < 10) {
+                statusDiv.innerText = '⚠️ ROI ผิดพลาด';
+                return;
+            }
+            
+            // Upscale 4x (เพิ่มจาก 3x) - ภาพใหญ่ = OCR ดีขึ้น
+            const scale = 4;
+            canvas.width = roi.w * scale;
+            canvas.height = roi.h * scale;
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(video, 
+                roi.x, roi.y, roi.w, roi.h,
+                0, 0, canvas.width, canvas.height);
+            
+            // Save original for preview
+            copyToPreview(canvas, preview1);
+            
+            // Run multi-strategy OCR
+            const results = await runMultiStrategy(canvas);
+            
+            // Process results
+            let bestNumber = '';
+            let bestConfidence = 0;
+            
+            results.forEach(r => {
+                rawLogs.unshift(`[${r.strategy}] "${r.raw}" → "${r.clean}" (${Math.round(r.confidence)}%)`);
+                
+                // เก็บ unique numbers
+                if (r.clean.length >= 3) {
+                    if (!allResults[r.clean]) {
+                        allResults[r.clean] = { count: 0, totalConf: 0, sources: [] };
+                    }
+                    allResults[r.clean].count++;
+                    allResults[r.clean].totalConf += r.confidence;
+                    allResults[r.clean].sources.push(r.strategy);
+                    
+                    // ดูว่าเป็น best ไหม
+                    const score = r.confidence * Math.log(r.clean.length + 1);
+                    if (score > bestConfidence) {
+                        bestConfidence = score;
+                        bestNumber = r.clean;
+                    }
+                }
+            });
+            
+            // อัพเดท log
+            if (rawLogs.length > 20) rawLogs = rawLogs.slice(0, 20);
+            rawLogDiv.innerHTML = rawLogs.slice(0, 10).map(l => `<div>${l}</div>`).join('');
+            
+            // แสดงผล
+            if (bestNumber) {
+                resultDiv.innerText = bestNumber;
+                resultDiv.classList.remove('empty');
+                statusDiv.innerText = `✅ พบ ${Object.keys(allResults).length} ตัวเลือก`;
+                
+                if (navigator.vibrate) navigator.vibrate(100);
+            } else {
+                statusDiv.innerText = '❌ อ่านไม่ออก - ลองใหม่';
+            }
+            
+            updateResultsList();
+            clearBtn.style.display = 'block';
+            
+        } catch (e) {
+            statusDiv.innerText = `❌ Error: ${e.message}`;
+            console.error(e);
+        } finally {
+            isProcessing = false;
+            captureBtn.classList.remove('scanning');
+        }
+    }
+    
+    function updateResultsList() {
+        const sorted = Object.entries(allResults)
+            .map(([num, info]) => ({
+                num,
+                count: info.count,
+                avgConf: info.totalConf / info.count,
+                length: num.length
+            }))
+            .sort((a, b) => {
+                // Sort by: count (desc), then length (desc), then confidence (desc)
+                if (b.count !== a.count) return b.count - a.count;
+                if (b.length !== a.length) return b.length - a.length;
+                return b.avgConf - a.avgConf;
+            });
+        
+        if (sorted.length === 0) {
+            resultsListDiv.style.display = 'none';
+            return;
+        }
+        
+        resultsListDiv.style.display = 'block';
+        resultsListDiv.innerHTML = 
+            '<div style="font-size:11px; color:#888; margin-bottom:4px; text-align:left; padding: 0 4px;">ผลลัพธ์ทั้งหมด (แตะเพื่อเลือก):</div>' +
+            sorted.slice(0, 15).map((r, i) => 
+                `<div class="result-item ${i === 0 ? 'top' : ''}" onclick="selectResult('${r.num}')">
+                    <span class="num">${r.num}</span>
+                    <span class="meta">${r.length}d × ${r.count} (${Math.round(r.avgConf)}%)</span>
+                </div>`
+            ).join('');
+    }
+    
+    function selectResult(num) {
+        resultDiv.innerText = num;
+        resultDiv.classList.remove('empty');
+        
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(num).then(() => {
+                statusDiv.innerText = `📋 Copied: ${num}`;
+            });
+        }
+        
+        if (navigator.vibrate) navigator.vibrate(50);
+    }
+    
+    function clearAll() {
+        allResults = {};
+        rawLogs = [];
+        resultDiv.innerText = '--- กดปุ่มขาวเพื่อสแกน ---';
+        resultDiv.classList.add('empty');
+        resultsListDiv.style.display = 'none';
+        rawLogDiv.innerHTML = '';
+        clearBtn.style.display = 'none';
+        statusDiv.innerText = '🗑️ เคลียร์แล้ว - พร้อมสแกนใหม่';
+    }
 </script>
 
 </body>
